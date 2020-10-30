@@ -23,7 +23,7 @@ class AtlasI2C:
     """I2C class used to interact with Atlas devices."""
 
     # the timeout needed to query readings and calibrations
-    LONG_TIMEOUT = 1.5
+    LONG_TIMEOUT = .9
     # timeout for regular commands
     SHORT_TIMEOUT = .3
     # the default bus for I2C on the newer Raspberry Pis,
