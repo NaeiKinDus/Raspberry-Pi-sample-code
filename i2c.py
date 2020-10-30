@@ -25,9 +25,9 @@ def get_devices():
         device.set_i2c_address(i)
         response = device.query("I")
         try:
-            module_type = response.split(",")[1]
-            response = device.query("name,?").split(",")[1]
-        except IndexError:
+            module_type = response[1].split(",")[1]
+            response = device.query("name,?")[1].split(",")[1]
+        except (IndexError, AttributeError):
             # device is not an Atlas I2C sensor
             continue
         device_list.append(AtlasI2C(address=i, moduletype=module_type, name=response))

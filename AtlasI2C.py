@@ -74,6 +74,38 @@ class AtlasI2C:
     def app_using_python_two():
         return sys.version_info[0] < 3
 
+    @staticmethod
+    def get_response(raw_data):
+        if AtlasI2C.app_using_python_two():
+            return [i for i in raw_data if i != '\x00']
+        else:
+            return [i for i in raw_data if i != 0]
+
+    @staticmethod
+    def is_valid(response):
+        error_code = None
+        if len(response) > 0:
+            if AtlasI2C.app_using_python_two():
+                error_code = ord(response[0])
+            else:
+                error_code = int(response[0])
+            if error_code == 1:
+                return True, error_code
+        return False, error_code
+
+    @staticmethod
+    def handle_raspi_glitch(response):
+        """
+        Change MSB to 0 for all received characters except the first
+        and get a list of characters
+        NOTE: having to change the MSB to 0 is a glitch in the raspberry pi,
+        and you shouldn't have to do this!
+        """
+        if AtlasI2C.app_using_python_two():
+            return list(map(lambda x: chr(ord(x) & ~0x80), list(response)))
+        else:
+            return list(map(lambda x: chr(x & ~0x80), list(response)))
+
     def set_i2c_address(self, addr):
         """
         set the I2C communications to the slave specified by the address
@@ -91,38 +123,6 @@ class AtlasI2C:
         cmd += "\00"
         self.file_write.write(cmd.encode('latin-1'))
 
-    def handle_raspi_glitch(self, response):
-        """
-        Change MSB to 0 for all received characters except the first
-        and get a list of characters
-        NOTE: having to change the MSB to 0 is a glitch in the raspberry pi,
-        and you shouldn't have to do this!
-        """
-        if self.app_using_python_two():
-            return list(map(lambda x: chr(ord(x) & ~0x80), list(response)))
-        else:
-            return list(map(lambda x: chr(x & ~0x80), list(response)))
-
-    def get_response(self, raw_data):
-        if self.app_using_python_two():
-            return [i for i in raw_data if i != '\x00']
-        else:
-            return raw_data
-
-    def response_valid(self, response):
-        valid = True
-        error_code = None
-        if len(response) > 0:
-            if self.app_using_python_two():
-                error_code = str(ord(response[0]))
-            else:
-                error_code = str(response[0])
-
-            if error_code != '1':
-                valid = False
-
-        return valid, error_code
-
     def get_device_info(self):
         if not self._name:
             return self._module + " " + str(self.address)
@@ -135,13 +135,13 @@ class AtlasI2C:
         """
         raw_data = self.file_read.read(num_of_bytes)
         response = self.get_response(raw_data=raw_data)
-        is_valid, error_code = self.response_valid(response=response)
+        is_valid, error_code = AtlasI2C.is_valid(response=response)
 
         if is_valid:
-            char_list = self.handle_raspi_glitch(response[1:])
-            return "Success " + self.get_device_info() + ": " + str(''.join(char_list))
+            char_list = AtlasI2C.handle_raspi_glitch(response[1:])
+            return 0, str(''.join(char_list))
         else:
-            return "Error " + self.get_device_info() + ": " + error_code
+            return error_code, None
 
     def get_command_timeout(self, command):
         if command.upper().startswith(self.LONG_TIMEOUT_COMMANDS):
@@ -158,7 +158,8 @@ class AtlasI2C:
         self.write(command)
         current_timeout = self.get_command_timeout(command=command)
         if not current_timeout:
-            return "sleep mode"
+            # No return, command was "Sleep"
+            return None
         else:
             time.sleep(current_timeout)
             return self.read()
